@@ -4,19 +4,12 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     // Keywords
-    Function,
-    Return,
     Let,
     If,
     Else,
-    While,
-    True,
-    False,
 
     // Types
     TypeInt,
-    TypeBool,
-    TypeVoid,
 
     // Ident and literals
     Identifier(String),
@@ -29,23 +22,19 @@ pub enum Token {
     RightBrace,
     Colon,
     Semicolon,
-    Comma,
-    Arrow,
-    Assign,
+    Equal,
 
     // Arithmetic ops
     Plus,
     Minus,
     Star,
     Slash,
-    Equal,
+    EqualEqual,
     NotEqual,
     Less,
     LessEqual,
     Greater,
     GreaterEqual,
-    And,
-    Or,
 
     // End of file
     Eof,
@@ -93,17 +82,10 @@ pub fn lex(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
                 }
 
                 let token = match identifier.as_str() {
-                    "fn" => Token::Function,
-                    "return" => Token::Return,
                     "let" => Token::Let,
                     "if" => Token::If,
                     "else" => Token::Else,
-                    "while" => Token::While,
-                    "true" => Token::True,
-                    "false" => Token::False,
                     "int" => Token::TypeInt,
-                    "bool" => Token::TypeBool,
-                    "void" => Token::TypeVoid,
                     _ => Token::Identifier(identifier),
                 };
                 tokens.push(token);
@@ -129,13 +111,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
             '-' => {
                 chars.next();
                 position += 1;
-                if let Some(&'>') = chars.peek() {
-                    chars.next();
-                    position += 1;
-                    tokens.push(Token::Arrow);
-                } else {
-                    tokens.push(Token::Minus);
-                }
+                tokens.push(Token::Minus);
             }
             '+' => {
                 chars.next();
@@ -158,9 +134,9 @@ pub fn lex(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
                 if let Some(&'=') = chars.peek() {
                     chars.next();
                     position += 1;
-                    tokens.push(Token::Equal);
+                    tokens.push(Token::EqualEqual);
                 } else {
-                    tokens.push(Token::Assign)
+                    tokens.push(Token::Equal)
                 }
             }
             '<' => {
@@ -199,34 +175,6 @@ pub fn lex(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
                     }));
                 }
             }
-            '&' => {
-                chars.next();
-                position += 1;
-                if let Some(&'&') = chars.peek() {
-                    chars.next();
-                    position += 1;
-                    tokens.push(Token::And);
-                } else {
-                    return Err(Box::new(LexerError {
-                        message: "Expected '&' after '&'".to_string(),
-                        position,
-                    }));
-                }
-            }
-            '|' => {
-                chars.next();
-                position += 1;
-                if let Some(&'|') = chars.peek() {
-                    chars.next();
-                    position += 1;
-                    tokens.push(Token::Or);
-                } else {
-                    return Err(Box::new(LexerError {
-                        message: "Expected '|' after '|'".to_string(),
-                        position,
-                    }));
-                }
-            }
             '(' => {
                 chars.next();
                 position += 1;
@@ -257,11 +205,6 @@ pub fn lex(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
                 position += 1;
                 tokens.push(Token::Semicolon);
             }
-            ',' => {
-                chars.next();
-                position += 1;
-                tokens.push(Token::Comma);
-            }
             _ => {
                 return Err(Box::new(LexerError {
                     message: format!("Unexpected character: {}", ch),
@@ -280,29 +223,32 @@ mod tests {
 
     #[test]
     fn test_lex_function() {
-        let input = "fn add(a: int, b: int) -> int { return a + b; }";
+        let input = "let x: int = 3; let y: int = 2; let z: int = x + y;";
         let tokens = lex(input).unwrap();
         let expected = [
-            Token::Function,
-            Token::Identifier("add".to_string()),
-            Token::LeftParen,
-            Token::Identifier("a".to_string()),
+            Token::Let,
+            Token::Identifier("x".to_string()),
             Token::Colon,
             Token::TypeInt,
-            Token::Comma,
-            Token::Identifier("b".to_string()),
-            Token::Colon,
-            Token::TypeInt,
-            Token::RightParen,
-            Token::Arrow,
-            Token::TypeInt,
-            Token::LeftBrace,
-            Token::Return,
-            Token::Identifier("a".to_string()),
-            Token::Plus,
-            Token::Identifier("b".to_string()),
+            Token::Equal,
+            Token::Integer(3),
             Token::Semicolon,
-            Token::RightBrace,
+            Token::Let,
+            Token::Identifier("y".to_string()),
+            Token::Colon,
+            Token::TypeInt,
+            Token::Equal,
+            Token::Integer(2),
+            Token::Semicolon,
+            Token::Let,
+            Token::Identifier("z".to_string()),
+            Token::Colon,
+            Token::TypeInt,
+            Token::Equal,
+            Token::Identifier("x".to_string()),
+            Token::Plus,
+            Token::Identifier("y".to_string()),
+            Token::Semicolon,
             Token::Eof,
         ];
         assert_eq!(tokens, expected);
