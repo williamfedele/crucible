@@ -7,9 +7,16 @@ pub enum Token {
     Function,
     Return,
     Let,
+    If,
+    Else,
+    While,
+    True,
+    False,
 
     // Types
     TypeInt,
+    TypeBool,
+    TypeVoid,
 
     // Ident and literals
     Identifier(String),
@@ -24,12 +31,21 @@ pub enum Token {
     Semicolon,
     Comma,
     Arrow,
+    Assign,
 
     // Arithmetic ops
     Plus,
     Minus,
     Star,
     Slash,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    And,
+    Or,
 
     // End of file
     Eof,
@@ -80,7 +96,14 @@ pub fn lex(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
                     "fn" => Token::Function,
                     "return" => Token::Return,
                     "let" => Token::Let,
+                    "if" => Token::If,
+                    "else" => Token::Else,
+                    "while" => Token::While,
+                    "true" => Token::True,
+                    "false" => Token::False,
                     "int" => Token::TypeInt,
+                    "bool" => Token::TypeBool,
+                    "void" => Token::TypeVoid,
                     _ => Token::Identifier(identifier),
                 };
                 tokens.push(token);
@@ -128,6 +151,81 @@ pub fn lex(input: &str) -> Result<Vec<Token>, Box<dyn Error>> {
                 chars.next();
                 position += 1;
                 tokens.push(Token::Slash);
+            }
+            '=' => {
+                chars.next();
+                position += 1;
+                if let Some(&'=') = chars.peek() {
+                    chars.next();
+                    position += 1;
+                    tokens.push(Token::Equal);
+                } else {
+                    tokens.push(Token::Assign)
+                }
+            }
+            '<' => {
+                chars.next();
+                position += 1;
+                if let Some(&'=') = chars.peek() {
+                    chars.next();
+                    position += 1;
+                    tokens.push(Token::LessEqual);
+                } else {
+                    tokens.push(Token::Less)
+                }
+            }
+            '>' => {
+                chars.next();
+                position += 1;
+                if let Some(&'=') = chars.peek() {
+                    chars.next();
+                    position += 1;
+                    tokens.push(Token::GreaterEqual);
+                } else {
+                    tokens.push(Token::Greater)
+                }
+            }
+            '!' => {
+                chars.next();
+                position += 1;
+                if let Some(&'=') = chars.peek() {
+                    chars.next();
+                    position += 1;
+                    tokens.push(Token::NotEqual);
+                } else {
+                    return Err(Box::new(LexerError {
+                        message: "Expected '=' after '!'".to_string(),
+                        position,
+                    }));
+                }
+            }
+            '&' => {
+                chars.next();
+                position += 1;
+                if let Some(&'&') = chars.peek() {
+                    chars.next();
+                    position += 1;
+                    tokens.push(Token::And);
+                } else {
+                    return Err(Box::new(LexerError {
+                        message: "Expected '&' after '&'".to_string(),
+                        position,
+                    }));
+                }
+            }
+            '|' => {
+                chars.next();
+                position += 1;
+                if let Some(&'|') = chars.peek() {
+                    chars.next();
+                    position += 1;
+                    tokens.push(Token::Or);
+                } else {
+                    return Err(Box::new(LexerError {
+                        message: "Expected '|' after '|'".to_string(),
+                        position,
+                    }));
+                }
             }
             '(' => {
                 chars.next();
