@@ -1,5 +1,5 @@
 mod ast;
-// mod ir;
+mod ir;
 mod lexer;
 mod parser;
 

@@ -95,17 +95,16 @@ impl Parser {
                         value,
                     })
                 } else {
-                    let expr = self.parse_expression()?;
-                    self.consume(Token::Semicolon, "Expected ';' after expression")?;
-                    Ok(Statement::Expr(expr))
+                    return Err(Box::new(ParseError {
+                        message: "Unexpected expressions used as statement".to_string(),
+                    }));
                 }
             }
             Token::If => self.parse_if_statement(),
             _ => {
-                let expr = self.parse_expression()?;
-                println!("{:?}, {}", self.peek(), self.current);
-                self.consume(Token::Semicolon, "Expected ';' after expression")?;
-                Ok(Statement::Expr(expr))
+                return Err(Box::new(ParseError {
+                    message: "Expected statement".to_string(),
+                }))
             }
         }
     }

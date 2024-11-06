@@ -48,7 +48,6 @@ pub enum Statement {
         target: String,
         value: Expr,
     },
-    Expr(Expr),
     If {
         condition: Expr,
         then_branch: Vec<Statement>,
