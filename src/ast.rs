@@ -7,21 +7,6 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
-    Comparison {
-        op: ComparisonOp,
-        left: Box<Expr>,
-        right: Box<Expr>,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub enum ComparisonOp {
-    EqualEqual,
-    NotEqual,
-    Less,
-    LessEqual,
-    Greater,
-    GreaterEqual,
 }
 
 #[derive(Debug, Clone)]
@@ -32,7 +17,7 @@ pub enum BinaryOp {
     Divide,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Int,
 }
@@ -47,10 +32,5 @@ pub enum Statement {
     Assignment {
         target: String,
         value: Expr,
-    },
-    If {
-        condition: Expr,
-        then_branch: Vec<Statement>,
-        else_branch: Option<Vec<Statement>>,
     },
 }

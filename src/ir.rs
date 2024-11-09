@@ -1,97 +1,184 @@
-use crate::ast::{BinaryOp, ComparisonOp, Expr, Statement, Type};
+use crate::ast::{BinaryOp, Expr, Statement};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-pub struct Program {
-    basic_blocks: Vec<BasicBlock>,
-    entry_block: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct BasicBlock {
-    pub name: String,
-    pub instructions: Vec<Instruction>,
-    pub terminator: Terminator,
-    pub predecessors: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Value {
-    Integer(i64),
+pub enum Instruction {
+    // Expr::Integer
+    Constant {
+        result: String,
+        value: i64,
+    },
+    // Expr::Binary
     Binary {
+        result: String,
         op: BinaryOp,
         left: String,
         right: String,
     },
-    Comparison {
-        op: ComparisonOp,
-        left: String,
-        right: String,
-    },
-    Phi {
-        incoming: Vec<(BasicBlock, String)>,
-    },
 }
-
-#[derive(Debug, Clone)]
-pub struct Instruction {
-    pub result: String,
-    pub value: Value,
-}
-
-#[derive(Debug, Clone)]
-pub enum Terminator {
-    Jump(String),
-    Branch {
-        condition: String,
-        true_block: String,
-        false_block: String,
-    },
-}
-
 #[derive(Debug)]
-struct TranslationContext {
-    current_var: usize,
-    current_block: usize,
-    current_block_instructions: Vec<Instruction>,
-    blocks: Vec<BasicBlock>,
-    variable_versions: HashMap<String, String>,
-    current_terminator: Option<Terminator>,
+pub struct Program {
+    pub instructions: Vec<Instruction>,
+    pub variables: HashMap<String, i64>,
 }
 
-impl TranslationContext {
-    fn new() -> Self {
-        TranslationContext {
-            current_var: 0,
-            current_block: 0,
-            current_block_instructions: Vec::new(),
-            blocks: Vec::new(),
-            variable_versions: HashMap::new(),
-            current_terminator: None,
+impl Program {
+    pub fn new() -> Self {
+        Program {
+            instructions: Vec::new(),
+            variables: HashMap::new(), // track number of variable versions
+        }
+    }
+}
+
+fn translate_literal(value: i64, ir: &mut Program, target: Option<&str>) -> String {
+    let result = if let Some(name) = target {
+        gen_name(name, ir)
+    } else {
+        format!("{}", value)
+    };
+
+    if target.is_some() {
+        ir.instructions.push(Instruction::Constant {
+            result: result.clone(),
+            value,
+        });
+    }
+    result
+}
+
+fn translate_expr(expr: &Expr, ir: &mut Program, target: Option<&str>) -> String {
+    match expr {
+        Expr::Integer(value) => translate_literal(*value, ir, target),
+        Expr::Variable(name) => format!("{}.{}", name, ir.variables.get(name).unwrap()),
+        Expr::Binary { op, left, right } => {
+            let left_var = match left.as_ref() {
+                Expr::Integer(value) => translate_literal(*value, ir, None),
+                _ => translate_expr(&left, ir, None),
+            };
+            let right_var = match right.as_ref() {
+                Expr::Integer(value) => translate_literal(*value, ir, None),
+                _ => translate_expr(&right, ir, None),
+            };
+            let result = if let Some(name) = target {
+                gen_name(name, ir)
+            } else {
+                gen_name("bin", ir)
+            };
+
+            ir.instructions.push(Instruction::Binary {
+                result: result.clone(),
+                op: op.clone(),
+                left: left_var,
+                right: right_var,
+            });
+            result
+        }
+    }
+}
+
+fn gen_name(name: &str, ir: &mut Program) -> String {
+    let counter = ir.variables.entry(name.to_string()).or_insert(0);
+    *counter += 1;
+    format!("{}.{}", name, counter)
+}
+
+pub fn lower(statements: Vec<Statement>) -> Program {
+    let mut ir = Program::new();
+
+    for stmt in statements {
+        match stmt {
+            Statement::Let { name, value, .. } => {
+                translate_expr(&value, &mut ir, Some(&name));
+            }
+            Statement::Assignment { target, value } => {
+                translate_expr(&value, &mut ir, Some(&target));
+            }
         }
     }
 
-    fn new_var(&mut self) -> String {
-        self.current_var += 1;
-        format!("&{}", self.current_var)
+    ir
+}
+
+fn constant_folding(program: &mut Program) {
+    let mut known_constants: HashMap<String, i64> = HashMap::new();
+    let mut modified = true;
+
+    while modified {
+        modified = false;
+        let mut i = 0;
+
+        while i < program.instructions.len() {
+            let instruction = program.instructions[i].clone();
+            match instruction {
+                Instruction::Constant { result, value } => {
+                    known_constants.insert(result.clone(), value);
+                }
+                Instruction::Binary {
+                    result,
+                    op,
+                    left,
+                    right,
+                } => {
+                    let left_val = known_constants
+                        .get(&left)
+                        .copied()
+                        .or_else(|| left.parse::<i64>().ok());
+                    let right_val = known_constants
+                        .get(&right)
+                        .copied()
+                        .or_else(|| right.parse::<i64>().ok());
+
+                    if let (Some(left_val), Some(right_val)) = (left_val, right_val) {
+                        let new_value = match op {
+                            BinaryOp::Add => left_val + right_val,
+                            BinaryOp::Subtract => left_val - right_val,
+                            BinaryOp::Multiply => left_val * right_val,
+                            BinaryOp::Divide => left_val / right_val,
+                        };
+                        program.instructions[i] = Instruction::Constant {
+                            result: result.clone(),
+                            value: new_value,
+                        };
+                        known_constants.insert(result.clone(), new_value);
+                        modified = true;
+                    }
+                }
+            }
+            i += 1;
+        }
+    }
+}
+
+fn dead_code_elimination(program: &mut Program) {
+    let mut uses: HashMap<String, usize> = HashMap::new();
+
+    for inst in &program.instructions {
+        match inst {
+            Instruction::Binary {
+                result,
+                op,
+                left,
+                right,
+            } => {
+                *uses.entry(left.clone()).or_default() += 1;
+                *uses.entry(right.clone()).or_default() += 1;
+            }
+            _ => {}
+        }
     }
 
-    fn new_block(&mut self) -> String {
-        self.current_block += 1;
-        format!("block{}", self.current_block)
-    }
+    program.instructions.retain(|inst| match inst {
+        Instruction::Constant { result, .. } | Instruction::Binary { result, .. } => {
+            uses.get(result).copied().unwrap_or(0) > 0
+        }
+    })
+}
 
-    fn finish_block(&mut self, terminator: Terminator) -> String {
-        let block_name = format!("block{}", self.current_block);
-        let instructions = std::mem::take(&mut self.current_block_instructions);
-
-        self.blocks.push(BasicBlock {
-            name: block_name.clone(),
-            instructions,
-            terminator,
-            predecessors: Vec::new(),
-        });
-
-        self.new_block()
-    }
+pub fn optimize(program: &mut Program) {
+    println!("\nOriginal IR: {:?}", program.instructions);
+    dead_code_elimination(program);
+    println!("\nDead Code IR: {:?}", program.instructions);
+    constant_folding(program);
+    println!("\nConstant Fold IR: {:?}", program.instructions);
 }

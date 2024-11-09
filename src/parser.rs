@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, ComparisonOp, Expr, Statement, Type};
+use crate::ast::{BinaryOp, Expr, Statement, Type};
 use crate::lexer::Token;
 use std::{error::Error, fmt};
 
@@ -77,7 +77,7 @@ impl Parser {
                 self.consume(Token::Colon, "Expected ':' after variable name")?;
                 let typ = self.parse_type()?;
                 self.consume(Token::Equal, "Expected '=' after type")?;
-                let value = self.parse_expression()?;
+                let value = self.parse_binary()?;
                 self.consume(Token::Semicolon, "Expected ';' after expression")?;
                 Ok(Statement::Let { name, typ, value })
             }
@@ -88,7 +88,7 @@ impl Parser {
                         _ => unreachable!(),
                     };
                     self.advance();
-                    let value = self.parse_expression()?;
+                    let value = self.parse_binary()?;
                     self.consume(Token::Semicolon, "Expected ';' after assignment")?;
                     Ok(Statement::Assignment {
                         target: name,
@@ -100,49 +100,12 @@ impl Parser {
                     }));
                 }
             }
-            Token::If => self.parse_if_statement(),
             _ => {
                 return Err(Box::new(ParseError {
                     message: "Expected statement".to_string(),
                 }))
             }
         }
-    }
-
-    fn parse_expression(&mut self) -> Result<Expr, Box<dyn Error>> {
-        self.parse_comparison()
-    }
-
-    fn parse_comparison(&mut self) -> Result<Expr, Box<dyn Error>> {
-        let mut expr = self.parse_binary()?;
-
-        while matches!(
-            self.peek(),
-            Token::EqualEqual
-                | Token::NotEqual
-                | Token::Less
-                | Token::LessEqual
-                | Token::Greater
-                | Token::GreaterEqual
-        ) {
-            let op = match self.advance() {
-                Token::EqualEqual => ComparisonOp::EqualEqual,
-                Token::NotEqual => ComparisonOp::NotEqual,
-                Token::Less => ComparisonOp::Less,
-                Token::LessEqual => ComparisonOp::LessEqual,
-                Token::Greater => ComparisonOp::Greater,
-                Token::GreaterEqual => ComparisonOp::GreaterEqual,
-                _ => unreachable!(),
-            };
-            let right = self.parse_binary()?;
-            expr = Expr::Comparison {
-                op,
-                left: Box::new(expr),
-                right: Box::new(right),
-            };
-        }
-
-        Ok(expr)
     }
 
     fn parse_binary(&mut self) -> Result<Expr, Box<dyn Error>> {
@@ -178,43 +141,6 @@ impl Parser {
                 message: "Expected expression".to_string(),
             })),
         }
-    }
-
-    fn parse_if_statement(&mut self) -> Result<Statement, Box<dyn Error>> {
-        self.consume(Token::If, "Expected 'if'")?;
-        self.consume(Token::LeftParen, "Expected '(' after 'if'")?;
-
-        let condition = self.parse_expression()?;
-
-        self.consume(Token::RightParen, "Expected ')' after if condition")?;
-        self.consume(Token::LeftBrace, "Expected '{' before if body")?;
-
-        let mut then_branch = Vec::new();
-        while !matches!(self.peek(), Token::RightBrace) {
-            then_branch.push(self.parse_statement()?);
-        }
-        self.consume(Token::RightBrace, "Expected '}' after if body")?;
-
-        let else_branch = if matches!(self.peek(), Token::Else) {
-            self.advance();
-            self.consume(Token::LeftBrace, "Expected '{' before else body")?;
-
-            let mut else_statements = Vec::new();
-            while !matches!(self.peek(), Token::RightBrace) {
-                else_statements.push(self.parse_statement()?);
-            }
-            self.consume(Token::RightBrace, "Expected '}' after else body")?;
-
-            Some(else_statements)
-        } else {
-            None
-        };
-
-        Ok(Statement::If {
-            condition,
-            then_branch,
-            else_branch,
-        })
     }
 }
 
